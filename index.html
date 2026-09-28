@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1F5E4E">
+<meta name="description" content="1枚の画像をフィード投稿用に3・6・9枚（1080×1350）へ切り分けて保存できる無料ツール。画像は端末の外に送信されません。">
+<title>フィード分割カッター</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#EEF2EF; --surface:#FFFFFF; --ink:#16241F; --muted:#56655F; --line:#CDD8D3;
+  --mat:#1F5E4E; --mat-soft:#DCEAE4; --mat-ink:#FFFFFF; --accent:#F2C14E; --accent-ink:#2A2208;
+  --ok:#1E7A4F; --ok-bg:#E2F3EA; --ng:#B3261E; --ng-bg:#FBE6E4; --focus:#2F7FD1;
+  --font:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo",system-ui,sans-serif;
+  --mono:ui-monospace,"SFMono-Regular","Menlo",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --bg:#101815; --surface:#18221E; --ink:#E6EEEA; --muted:#9AAAA3; --line:#2C3A35;
+    --mat:#2B7A64; --mat-soft:#1C332C; --ok:#6FD3A0; --ok-bg:#16322A; --ng:#FF8A80; --ng-bg:#3A1C1A; --focus:#6FB0F0;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.65;
+  padding-inline:16px;padding-block:calc(18px + env(safe-area-inset-top,0px)) calc(48px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:clamp(24px,6vw,32px);margin:0;letter-spacing:.02em;line-height:1.3}
+.lead{margin:6px 0 0;color:var(--muted);font-size:14.5px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.card.done{opacity:.95}
+.step{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;margin:0}
+.step i{font-style:normal;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--mat);color:var(--mat-ink);font-size:15px;flex:none}
+.note{margin:0;font-size:14px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700}
+
+/* Step 1: split choice with little grid pictures */
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.choice{appearance:none;font:inherit;color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:12px 6px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px}
+.choice:hover{border-color:var(--mat)}
+.choice[aria-pressed="true"]{border-color:var(--mat);background:var(--mat-soft)}
+.choice b{font-size:17px;line-height:1.2}
+.choice small{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mini{display:grid;grid-template-columns:repeat(3,14px);gap:2px}
+.mini span{width:14px;height:17.5px;border-radius:2px;background:var(--line)}
+.choice[aria-pressed="true"] .mini span{background:var(--mat)}
+.need{background:var(--bg);border-radius:10px;padding:12px 14px;font-size:15px}
+.need .big{font-size:22px;display:block;margin-top:2px}
+
+/* Step 2: file picking */
+.pick{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:120px;border:2px dashed var(--mat);border-radius:12px;background:var(--mat-soft);padding:18px 12px;text-align:center;cursor:pointer}
+.pick strong{font-size:18px;color:var(--mat)}
+@media (prefers-color-scheme: dark){ .pick strong{color:var(--ink)} }
+.pick span{font-size:13.5px;color:var(--muted)}
+.pick.over{border-style:solid}
+.pick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.status{border-radius:10px;padding:12px 14px;font-size:15px;display:flex;flex-direction:column;gap:10px}
+.status.ok{background:var(--ok-bg);color:var(--ok)}
+.status.ng{background:var(--ng-bg);color:var(--ng)}
+.status strong{font-size:16px}
+
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:15px;padding:10px 16px;border-radius:10px;cursor:pointer;min-height:44px}
+.btn:hover{border-color:var(--mat)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700;font-size:17px;min-height:54px;width:100%}
+.btn.primary:hover{filter:brightness(.96)}
+.btn.link{border:0;background:none;color:var(--muted);text-decoration:underline;min-height:36px;padding:4px 0;align-self:center;font-size:14px}
+.btn:disabled{opacity:.5;cursor:default}
+.status .btn{align-self:flex-start;background:var(--surface)}
+button:focus-visible,.pick:focus-within,input:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+/* Step 3: result */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.tile{position:relative;appearance:none;border:0;padding:0;background:none;cursor:pointer;display:block;border-radius:4px;overflow:hidden}
+.tile img{display:block;width:100%;height:auto;background:var(--line);-webkit-touch-callout:default}
+.tile .no{position:absolute;top:6px;left:6px;min-width:26px;height:26px;display:grid;place-items:center;background:rgba(0,0,0,.75);color:#fff;font-family:var(--mono);font-size:14px;font-weight:700;border-radius:13px;padding:0 6px}
+.tile .dl{position:absolute;right:6px;bottom:6px;background:rgba(255,255,255,.92);color:#16241F;font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px}
+.tile.saved .dl{background:var(--accent);color:var(--accent-ink)}
+.howto{margin:0;padding-left:1.3em;font-size:14.5px;display:flex;flex-direction:column;gap:4px}
+.fmt{display:flex;gap:18px;flex-wrap:wrap;font-size:14.5px;color:var(--muted)}
+.fmt label{display:flex;align-items:center;gap:6px;cursor:pointer;min-height:32px}
+details{font-size:14.5px}
+details summary{cursor:pointer;color:var(--muted)}
+details ul{margin:8px 0 0;padding-left:1.3em;display:flex;flex-direction:column;gap:4px}
+footer{text-align:center;font-size:12.5px;color:var(--muted)}
+.hidden{display:none!important}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+@media (min-width:600px){.tiles{gap:6px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>フィード分割カッター</h1>
+    <p class="lead">1枚の画像を、フィード投稿用の画像（1枚 1080×1350）に切り分けます。画像はこの端末の中だけで処理され、どこにも送信されません。</p>
+  </header>
+
+  <section class="card" aria-labelledby="s1">
+    <h2 class="step" id="s1"><i>1</i>何枚に分けますか？</h2>
+    <div class="choices" id="choices">
+      <button type="button" class="choice" data-n="3" aria-pressed="false"><span class="mini" data-rows="1"></span><b>3枚</b><small>横3×縦1</small></button>
+      <button type="button" class="choice" data-n="6" aria-pressed="false"><span class="mini" data-rows="2"></span><b>6枚</b><small>横3×縦2</small></button>
+      <button type="button" class="choice" data-n="9" aria-pressed="true"><span class="mini" data-rows="3"></span><b>9枚</b><small>横3×縦3</small></button>
+    </div>
+    <div class="need" id="need"></div>
+  </section>
+
+  <section class="card" aria-labelledby="s2">
+    <h2 class="step" id="s2"><i>2</i>画像を選んでください</h2>
+    <label class="pick" id="pick">
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" aria-label="画像を選ぶ">
+      <strong>ここをタップして画像を選ぶ</strong>
+      <span>パソコンは画像をここにドラッグしてもOK</span>
+    </label>
+    <div class="status hidden" id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="card hidden" id="outCard" aria-labelledby="s3">
+    <h2 class="step" id="s3"><i>3</i>保存して投稿しましょう</h2>
+    <button type="button" class="btn primary" id="saveAll">全部まとめて保存する</button>
+    <p class="note" id="tapNote">1枚だけ保存したいときは、その画像をタップしてください。</p>
+    <div class="tiles" id="tiles"></div>
+    <ol class="howto">
+      <li>画像の左上の<strong>数字の順番</strong>で投稿してください（1 → 2 → 3 …）。</li>
+      <li>新しい投稿ほどプロフィールの左上に並ぶので、この順番で投稿すると1枚の絵に見えます。</li>
+      <li>保存したファイル名も、投稿する順番の数字で始まります。</li>
+    </ol>
+    <details>
+      <summary>うまく保存できないとき・その他の設定</summary>
+      <ul>
+        <li>スマホでは、保存ボタンを押すと共有メニューが開きます。<strong>「画像を保存」</strong>を選ぶと写真アプリに入ります。</li>
+        <li>それでも保存できないときは、画像を<strong>長押し</strong>して「写真に追加」や「画像を保存」を選んでください。</li>
+        <li>パソコンで「複数のファイルのダウンロード」を確認されたら「許可」を選んでください。</li>
+      </ul>
+      <div class="fmt" role="radiogroup" aria-label="保存形式" style="margin-top:10px">
+        <label><input type="radio" name="fmt" value="jpg" checked> JPG（おすすめ）</label>
+        <label><input type="radio" name="fmt" value="png"> PNG（劣化なし・容量大）</label>
+      </div>
+    </details>
+    <button type="button" class="btn link" id="reset">別の画像でやり直す</button>
+  </section>
+
+  <footer>画像はサーバーに送信されません。無料でご利用いただけます。</footer>
+</div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+  var TW = 1080, TH = 1350, COLS = 3;
+  var S = { n: 9, img: null, name: "feed", fmt: "jpg", files: [] };
+  var $ = function(id){ return document.getElementById(id); };
+  var isTouch = window.matchMedia("(pointer: coarse)").matches;
+
+  // little grid pictures on the split buttons
+  Array.prototype.forEach.call(document.querySelectorAll(".mini"), function(m){
+    var cells = Number(m.dataset.rows) * COLS;
+    for (var i = 0; i < cells; i++) m.appendChild(document.createElement("span"));
+  });
+
+  function need(n){ return { w: TW * COLS, h: TH * (n / COLS) }; }
+  function modeFor(w, h){
+    for (var n = 3; n <= 9; n += 3){ var r = need(n); if (r.w === w && r.h === h) return n; }
+    return 0;
+  }
+
+  function renderNeed(){
+    var r = need(S.n);
+    $("need").innerHTML = S.n + "枚に分けるには、次の大きさの画像が必要です。" +
+      "<span class=\"big mono\">横 " + r.w + " × 縦 " + r.h + " px</span>";
+  }
+
+  function setStatus(kind, html){
+    var el = $("status");
+    el.className = "status " + kind;
+    el.innerHTML = html;
+  }
+
+  function validate(){
+    renderNeed();
+    if (!S.img){ $("status").className = "status hidden"; $("outCard").classList.add("hidden"); return; }
+    var w = S.img.naturalWidth, h = S.img.naturalHeight, r = need(S.n);
+    if (w === r.w && h === r.h){
+      setStatus("ok", "<strong>✓ サイズOK</strong><span>" + S.n + "枚に切り分けました。下の「3」に進んでください。</span>");
+      buildTiles(true);
+      return;
+    }
+    $("outCard").classList.add("hidden");
+    var msg = "<strong>この画像は使えません</strong>" +
+      "<span>選んだ画像の大きさは <span class=\"mono\">横 " + w + " × 縦 " + h + " px</span> です。" +
+      S.n + "枚に分けるには <span class=\"mono\">横 " + r.w + " × 縦 " + r.h + " px</span> の画像を選んでください。</span>";
+    var alt = modeFor(w, h);
+    if (alt){
+      msg += "<span>この画像は<strong>" + alt + "枚用</strong>の大きさです。</span>" +
+        "<button type=\"button\" class=\"btn\" id=\"switchBtn\">" + alt + "枚に分けるに切り替える</button>";
+    }
+    setStatus("ng", msg);
+    var sw = $("switchBtn");
+    if (sw) sw.addEventListener("click", function(){ setMode(alt); });
+  }
+
+  function setMode(n){
+    S.n = n;
+    Array.prototype.forEach.call($("choices").querySelectorAll(".choice"), function(b){
+      b.setAttribute("aria-pressed", String(Number(b.dataset.n) === n));
+    });
+    validate();
+  }
+
+  function postOrder(i){ return S.n - i; }
+  function fileName(i){
+    var r = Math.floor(i / COLS) + 1, c = i % COLS + 1;
+    return String(postOrder(i)).padStart(2, "0") + "_" + S.name + "_r" + r + "c" + c + "." + S.fmt;
+  }
+
+  function cut(i){
+    var cv = document.createElement("canvas");
+    cv.width = TW; cv.height = TH;
+    var ctx = cv.getContext("2d");
+    // same size in and out: pixels are copied 1:1, no resampling
+    ctx.drawImage(S.img, (i % COLS) * TW, Math.floor(i / COLS) * TH, TW, TH, 0, 0, TW, TH);
+    var type = S.fmt === "png" ? "image/png" : "image/jpeg";
+    return new Promise(function(res){ cv.toBlob(res, type, 0.95); });
+  }
+
+  var buildToken = 0;
+  async function buildTiles(scroll){
+    var token = ++buildToken;
+    $("saveAll").disabled = true;
+    var files = [];
+    for (var i = 0; i < S.n; i++){
+      var blob = await cut(i);
+      if (token !== buildToken) return;
+      files.push(new File([blob], fileName(i), { type: blob.type }));
+    }
+    S.files.forEach(function(f){ if (f.url) URL.revokeObjectURL(f.url); });
+    files.forEach(function(f){ f.url = URL.createObjectURL(f); });
+    S.files = files;
+
+    var box = $("tiles");
+    box.innerHTML = "";
+    files.forEach(function(f, i){
+      var t = document.createElement("button");
+      t.type = "button"; t.className = "tile";
+      t.setAttribute("aria-label", postOrder(i) + "番目に投稿する画像を保存");
+      var img = document.createElement("img");
+      img.src = f.url; img.alt = ""; img.width = TW; img.height = TH;
+      var no = document.createElement("span"); no.className = "no"; no.textContent = postOrder(i);
+      var dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "保存";
+      t.appendChild(img); t.appendChild(no); t.appendChild(dl);
+      t.addEventListener("click", function(){ saveFiles([f], [t]); });
+      box.appendChild(t);
+    });
+    $("outCard").classList.remove("hidden");
+    $("saveAll").disabled = false;
+    if (scroll) $("outCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function canShareFiles(files){
+    try { return isTouch && !!navigator.canShare && navigator.canShare({ files: files }); }
+    catch (e){ return false; }
+  }
+
+  function download(f){
+    var a = document.createElement("a");
+    a.href = f.url; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function markSaved(tiles){ (tiles || []).forEach(function(t){ t.classList.add("saved"); t.querySelector(".dl").textContent = "保存済"; }); }
+
+  function saveFiles(files, tiles){
+    // in post order, so they line up in the photo library the way they will be posted
+    var ordered = files.slice().sort(function(a, b){ return a.name < b.name ? -1 : 1; });
+    if (canShareFiles(ordered)){
+      navigator.share({ files: ordered }).then(function(){ markSaved(tiles); }).catch(function(e){
+        if (e && e.name === "AbortError") return;
+        ordered.forEach(download); markSaved(tiles);
+      });
+      return;
+    }
+    ordered.forEach(function(f, k){ setTimeout(function(){ download(f); }, k * 350); });
+    markSaved(tiles);
+    toast(ordered.length > 1 ? ordered.length + "枚を保存しています" : "保存しました：" + ordered[0].name);
+  }
+
+  $("saveAll").addEventListener("click", function(){
+    if (S.files.length) saveFiles(S.files, Array.prototype.slice.call($("tiles").children));
+  });
+
+  $("choices").addEventListener("click", function(e){
+    var b = e.target.closest(".choice"); if (b) setMode(Number(b.dataset.n));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=fmt]"), function(r){
+    r.addEventListener("change", function(){ S.fmt = r.value; if (S.img) buildTiles(false); });
+  });
+  $("reset").addEventListener("click", function(){
+    S.img = null; validate();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  function loadFile(f){
+    if (!f) return;
+    if (f.type && f.type.indexOf("image/") !== 0){ setStatus("ng", "<strong>画像ファイルを選んでください</strong>"); return; }
+    var url = URL.createObjectURL(f), img = new Image();
+    img.onload = function(){
+      S.img = img;
+      S.name = (f.name || "feed").replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40) || "feed";
+      validate();
+    };
+    img.onerror = function(){
+      setStatus("ng", "<strong>この画像は読み込めませんでした</strong><span>JPG または PNG で保存した画像を選んでください。</span>");
+    };
+    img.src = url;
+  }
+
+  $("file").addEventListener("change", function(e){ loadFile(e.target.files[0]); e.target.value = ""; });
+  var pick = $("pick");
+  ["dragenter", "dragover"].forEach(function(ev){ pick.addEventListener(ev, function(e){ e.preventDefault(); pick.classList.add("over"); }); });
+  ["dragleave", "drop"].forEach(function(ev){ pick.addEventListener(ev, function(){ pick.classList.remove("over"); }); });
+  document.addEventListener("dragover", function(e){ e.preventDefault(); });
+  document.addEventListener("drop", function(e){ e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+  var tt = null;
+  function toast(msg){
+    var el = $("toast"); el.textContent = msg; el.classList.remove("hidden");
+    clearTimeout(tt); tt = setTimeout(function(){ el.classList.add("hidden"); }, 3000);
+  }
+
+  renderNeed();
+})();
+</script>
+</body>
+</html>
