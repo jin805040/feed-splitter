@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1F5E4E">
-<meta name="description" content="1枚の画像をフィード投稿用に3・6・9枚（1080×1350）へ切り分けて保存できる無料ツール。画像は端末の外に送信されません。">
+<meta name="description" content="1枚の画像をフィード投稿用に2・3・6・9枚（1080×1350）へ切り分けて保存できる無料ツール。画像は端末の外に送信されません。">
 <title>フィード分割カッター</title>
 <style>
 :root{
@@ -37,13 +37,14 @@ h1{font-size:clamp(24px,6vw,32px);margin:0;letter-spacing:.02em;line-height:1.3}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700}
 
 /* Step 1: split choice with little grid pictures */
-.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.choices{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:380px){.choices{grid-template-columns:repeat(2,1fr)}}
 .choice{appearance:none;font:inherit;color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:12px 6px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px}
 .choice:hover{border-color:var(--mat)}
 .choice[aria-pressed="true"]{border-color:var(--mat);background:var(--mat-soft)}
 .choice b{font-size:17px;line-height:1.2}
 .choice small{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-.mini{display:grid;grid-template-columns:repeat(3,14px);gap:2px}
+.mini{display:grid;grid-template-columns:repeat(var(--cols,3),14px);gap:2px}
 .mini span{width:14px;height:17.5px;border-radius:2px;background:var(--line)}
 .choice[aria-pressed="true"] .mini span{background:var(--mat)}
 .need{background:var(--bg);border-radius:10px;padding:12px 14px;font-size:15px}
@@ -71,7 +72,7 @@ h1{font-size:clamp(24px,6vw,32px);margin:0;letter-spacing:.02em;line-height:1.3}
 button:focus-visible,.pick:focus-within,input:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 
 /* Step 3: result */
-.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.tiles{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:4px}
 .tile{position:relative;appearance:none;border:0;padding:0;background:none;cursor:pointer;display:block;border-radius:4px;overflow:hidden}
 .tile img{display:block;width:100%;height:auto;background:var(--line);-webkit-touch-callout:default}
 .tile .no{position:absolute;top:6px;left:6px;min-width:26px;height:26px;display:grid;place-items:center;background:rgba(0,0,0,.75);color:#fff;font-family:var(--mono);font-size:14px;font-weight:700;border-radius:13px;padding:0 6px}
@@ -99,6 +100,7 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
   <section class="card" aria-labelledby="s1">
     <h2 class="step" id="s1"><i>1</i>何枚に分けますか？</h2>
     <div class="choices" id="choices">
+      <button type="button" class="choice" data-n="2" aria-pressed="false"><span class="mini" data-cols="2" data-rows="1"></span><b>2枚</b><small>横2×縦1</small></button>
       <button type="button" class="choice" data-n="3" aria-pressed="false"><span class="mini" data-rows="1"></span><b>3枚</b><small>横3×縦1</small></button>
       <button type="button" class="choice" data-n="6" aria-pressed="false"><span class="mini" data-rows="2"></span><b>6枚</b><small>横3×縦2</small></button>
       <button type="button" class="choice" data-n="9" aria-pressed="true"><span class="mini" data-rows="3"></span><b>9枚</b><small>横3×縦3</small></button>
@@ -121,7 +123,12 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
     <button type="button" class="btn primary" id="saveAll">全部まとめて保存する</button>
     <p class="note" id="tapNote">1枚だけ保存したいときは、その画像をタップしてください。</p>
     <div class="tiles" id="tiles"></div>
-    <ol class="howto">
+    <ol class="howto hidden" id="howtoCarousel">
+      <li>2枚を<strong>1つの投稿</strong>にまとめて選びます（複数枚の投稿）。</li>
+      <li>画像の左上の<strong>数字の順番</strong>で選んでください（1 → 2）。横にスワイプすると1枚の絵につながって見えます。</li>
+      <li>保存したファイル名も、選ぶ順番の数字で始まります。</li>
+    </ol>
+    <ol class="howto" id="howtoGrid">
       <li>画像の左上の<strong>数字の順番</strong>で投稿してください（1 → 2 → 3 …）。</li>
       <li>新しい投稿ほどプロフィールの左上に並ぶので、この順番で投稿すると1枚の絵に見えます。</li>
       <li>保存したファイル名も、投稿する順番の数字で始まります。</li>
@@ -148,20 +155,24 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
 <script>
 (function(){
   "use strict";
-  var TW = 1080, TH = 1350, COLS = 3;
+  var TW = 1080, TH = 1350;
+  // 2 is one carousel post (swipe left to right); 3/6/9 fill the 3-column profile grid
+  var MODES = { 2: { cols: 2, rows: 1, carousel: true }, 3: { cols: 3, rows: 1 }, 6: { cols: 3, rows: 2 }, 9: { cols: 3, rows: 3 } };
   var S = { n: 9, img: null, name: "feed", fmt: "jpg", files: [] };
   var $ = function(id){ return document.getElementById(id); };
   var isTouch = window.matchMedia("(pointer: coarse)").matches;
 
   // little grid pictures on the split buttons
   Array.prototype.forEach.call(document.querySelectorAll(".mini"), function(m){
-    var cells = Number(m.dataset.rows) * COLS;
+    var cols = Number(m.dataset.cols || 3), cells = Number(m.dataset.rows) * cols;
+    m.style.setProperty("--cols", cols);
     for (var i = 0; i < cells; i++) m.appendChild(document.createElement("span"));
   });
 
-  function need(n){ return { w: TW * COLS, h: TH * (n / COLS) }; }
+  function cols(){ return MODES[S.n].cols; }
+  function need(n){ return { w: TW * MODES[n].cols, h: TH * MODES[n].rows }; }
   function modeFor(w, h){
-    for (var n = 3; n <= 9; n += 3){ var r = need(n); if (r.w === w && r.h === h) return n; }
+    for (var n in MODES){ var r = need(n); if (r.w === w && r.h === h) return Number(n); }
     return 0;
   }
 
@@ -208,9 +219,10 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
     validate();
   }
 
-  function postOrder(i){ return S.n - i; }
+  // grid: the newest post lands top-left, so post bottom-right first. carousel: left to right.
+  function postOrder(i){ return MODES[S.n].carousel ? i + 1 : S.n - i; }
   function fileName(i){
-    var r = Math.floor(i / COLS) + 1, c = i % COLS + 1;
+    var r = Math.floor(i / cols()) + 1, c = i % cols() + 1;
     return String(postOrder(i)).padStart(2, "0") + "_" + S.name + "_r" + r + "c" + c + "." + S.fmt;
   }
 
@@ -219,7 +231,7 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
     cv.width = TW; cv.height = TH;
     var ctx = cv.getContext("2d");
     // same size in and out: pixels are copied 1:1, no resampling
-    ctx.drawImage(S.img, (i % COLS) * TW, Math.floor(i / COLS) * TH, TW, TH, 0, 0, TW, TH);
+    ctx.drawImage(S.img, (i % cols()) * TW, Math.floor(i / cols()) * TH, TW, TH, 0, 0, TW, TH);
     var type = S.fmt === "png" ? "image/png" : "image/jpeg";
     return new Promise(function(res){ cv.toBlob(res, type, 0.95); });
   }
@@ -240,6 +252,9 @@ footer{text-align:center;font-size:12.5px;color:var(--muted)}
 
     var box = $("tiles");
     box.innerHTML = "";
+    box.style.setProperty("--cols", cols());
+    $("howtoCarousel").classList.toggle("hidden", !MODES[S.n].carousel);
+    $("howtoGrid").classList.toggle("hidden", !!MODES[S.n].carousel);
     files.forEach(function(f, i){
       var t = document.createElement("button");
       t.type = "button"; t.className = "tile";
